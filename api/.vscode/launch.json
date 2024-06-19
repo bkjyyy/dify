@@ -6,7 +6,7 @@
     "configurations": [
         {
             "name": "Python: Celery",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "celery",
             "justMyCode": true,
@@ -17,11 +17,12 @@
                 "FLASK_DEBUG": "1",
                 "GEVENT_SUPPORT": "True"
             },
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "python": "${command:python.interpreterPath}"
         },
         {
             "name": "Python: Flask",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "flask",
             "env": {
@@ -36,7 +37,8 @@
                 "--debug"
             ],
             "jinja": true,
-            "justMyCode": true
+            "justMyCode": true,
+            "python": "${command:python.interpreterPath}"
         }
     ]
 }

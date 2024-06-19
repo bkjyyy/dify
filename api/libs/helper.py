@@ -1,12 +1,16 @@
+import json
 import random
 import re
 import string
 import subprocess
 import uuid
+from collections.abc import Generator
 from datetime import datetime
 from hashlib import sha256
+from typing import Union
 from zoneinfo import available_timezones
 
+from flask import Response, stream_with_context
 from flask_restful import fields
 
 
@@ -15,13 +19,13 @@ def run(script):
 
 
 class TimestampField(fields.Raw):
-    def format(self, value):
+    def format(self, value) -> int:
         return int(value.timestamp())
 
 
 def email(email):
     # Define a regex pattern for email addresses
-    pattern = r"^[\w\.-]+@([\w-]+\.)+[\w-]{2,}$"
+    pattern = r"^[\w\.!#$%&'*+\-/=?^_`{|}~]+@([\w-]+\.)+[\w-]{2,}$"
     # Check if the email matches the pattern
     if re.match(pattern, email) is not None:
         return email
@@ -42,7 +46,13 @@ def uuid_value(value):
         error = ('{value} is not a valid uuid.'
                  .format(value=value))
         raise ValueError(error)
-
+    
+def alphanumeric(value: str):
+    # check if the value is alphanumeric and underlined
+    if re.match(r'^[a-zA-Z0-9_]+$', value):
+        return value
+    
+    raise ValueError(f'{value} is not a valid alphanumeric value')
 
 def timestamp_value(timestamp):
     try:
@@ -142,3 +152,14 @@ def get_remote_ip(request):
 def generate_text_hash(text: str) -> str:
     hash_text = str(text) + 'None'
     return sha256(hash_text.encode()).hexdigest()
+
+
+def compact_generate_response(response: Union[dict, Generator]) -> Response:
+    if isinstance(response, dict):
+        return Response(response=json.dumps(response), status=200, mimetype='application/json')
+    else:
+        def generate() -> Generator:
+            yield from response
+
+        return Response(stream_with_context(generate()), status=200,
+                        mimetype='text/event-stream')

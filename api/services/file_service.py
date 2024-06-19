@@ -20,9 +20,10 @@ from services.errors.file import FileTooLargeError, UnsupportedFileTypeError
 IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg']
 IMAGE_EXTENSIONS.extend([ext.upper() for ext in IMAGE_EXTENSIONS])
 
-ALLOWED_EXTENSIONS = ['txt', 'markdown', 'md', 'pdf', 'html', 'htm', 'xlsx', 'docx', 'csv']
-UNSTRUSTURED_ALLOWED_EXTENSIONS = ['txt', 'markdown', 'md', 'pdf', 'html', 'htm', 'xlsx',
-                                   'docx', 'csv', 'eml', 'msg', 'pptx', 'ppt', 'xml']
+ALLOWED_EXTENSIONS = ['txt', 'markdown', 'md', 'pdf', 'html', 'htm', 'xlsx', 'xls', 'docx', 'csv']
+UNSTRUSTURED_ALLOWED_EXTENSIONS = ['txt', 'markdown', 'md', 'pdf', 'html', 'htm', 'xlsx', 'xls',
+                                   'docx', 'csv', 'eml', 'msg', 'pptx', 'ppt', 'xml', 'epub']
+
 PREVIEW_WORDS_LIMIT = 3000
 
 
@@ -30,7 +31,10 @@ class FileService:
 
     @staticmethod
     def upload_file(file: FileStorage, user: Union[Account, EndUser], only_image: bool = False) -> UploadFile:
+        filename = file.filename
         extension = file.filename.split('.')[-1]
+        if len(filename) > 200:
+            filename = filename.split('.')[0][:200] + '.' + extension
         etl_type = current_app.config['ETL_TYPE']
         allowed_extensions = UNSTRUSTURED_ALLOWED_EXTENSIONS + IMAGE_EXTENSIONS if etl_type == 'Unstructured' \
             else ALLOWED_EXTENSIONS + IMAGE_EXTENSIONS
@@ -74,13 +78,13 @@ class FileService:
             tenant_id=current_tenant_id,
             storage_type=config['STORAGE_TYPE'],
             key=file_key,
-            name=file.filename,
+            name=filename,
             size=file_size,
             extension=extension,
             mime_type=file.mimetype,
             created_by_role=('account' if isinstance(user, Account) else 'end_user'),
             created_by=user.id,
-            created_at=datetime.datetime.utcnow(),
+            created_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
             used=False,
             hash=hashlib.sha3_256(file_content).hexdigest()
         )
@@ -92,6 +96,8 @@ class FileService:
 
     @staticmethod
     def upload_text(text: str, text_name: str) -> UploadFile:
+        if len(text_name) > 200:
+            text_name = text_name[:200]
         # user uuid as file name
         file_uuid = str(uuid.uuid4())
         file_key = 'upload_files/' + current_user.current_tenant_id + '/' + file_uuid + '.txt'
@@ -110,10 +116,10 @@ class FileService:
             extension='txt',
             mime_type='text/plain',
             created_by=current_user.id,
-            created_at=datetime.datetime.utcnow(),
+            created_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None),
             used=True,
             used_by=current_user.id,
-            used_at=datetime.datetime.utcnow()
+            used_at=datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         )
 
         db.session.add(upload_file)

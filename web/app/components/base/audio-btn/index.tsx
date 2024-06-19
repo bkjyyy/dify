@@ -1,29 +1,33 @@
 'use client'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { t } from 'i18next'
 import { useParams, usePathname } from 'next/navigation'
 import s from './style.module.css'
 import Tooltip from '@/app/components/base/tooltip'
 import { randomString } from '@/utils'
 import { textToAudio } from '@/service/share'
+import Loading from '@/app/components/base/loading'
 
 type AudioBtnProps = {
   value: string
   voice?: string
   className?: string
   isAudition?: boolean
+  noCache: boolean
 }
+
+type AudioState = 'initial' | 'loading' | 'playing' | 'paused' | 'ended'
 
 const AudioBtn = ({
   value,
   voice,
   className,
   isAudition,
+  noCache,
 }: AudioBtnProps) => {
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [isPause, setPause] = useState(false)
-  const [hasEnded, setHasEnded] = useState(false)
+  const [audioState, setAudioState] = useState<AudioState>('initial')
+
   const selector = useRef(`play-tooltip-${randomString(4)}`)
   const params = useParams()
   const pathname = usePathname()
@@ -34,11 +38,13 @@ const AudioBtn = ({
     return ''
   }
 
-  const playAudio = async () => {
+  const loadAudio = async () => {
     const formData = new FormData()
+    formData.append('text', removeCodeBlocks(value))
+    formData.append('voice', removeCodeBlocks(voice))
+
     if (value !== '') {
-      formData.append('text', removeCodeBlocks(value))
-      formData.append('voice', removeCodeBlocks(voice))
+      setAudioState('loading')
 
       let url = ''
       let isPublic = false
@@ -59,68 +65,93 @@ const AudioBtn = ({
         const blob_bytes = Buffer.from(audioResponse.data, 'latin1')
         const blob = new Blob([blob_bytes], { type: 'audio/wav' })
         const audioUrl = URL.createObjectURL(blob)
-        const audio = new Audio(audioUrl)
-        audioRef.current = audio
-        audio.play().then(() => {}).catch(() => {
-          setIsPlaying(false)
-          URL.revokeObjectURL(audioUrl)
-        })
-        audio.onended = () => {
-          setHasEnded(true)
-          setIsPlaying(false)
-        }
+        audioRef.current!.src = audioUrl
       }
       catch (error) {
-        setIsPlaying(false)
+        setAudioState('initial')
         console.error('Error playing audio:', error)
       }
     }
   }
-  const togglePlayPause = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        if (!hasEnded) {
-          setPause(false)
-          audioRef.current.play()
-        }
-        if (!isPause) {
-          setPause(true)
-          audioRef.current.pause()
-        }
-      }
-      else if (!isPlaying) {
-        if (isPause) {
-          setPause(false)
-          audioRef.current.play()
-        }
-        else {
-          setHasEnded(false)
-          playAudio().then()
-        }
-      }
-      setIsPlaying(prevIsPlaying => !prevIsPlaying)
+
+  const handleToggle = async () => {
+    if (audioState === 'initial' || noCache) {
+      await loadAudio()
     }
-    else {
-      setIsPlaying(true)
-      if (!isPlaying)
-        playAudio().then()
+    else if (audioRef.current) {
+      if (audioState === 'playing') {
+        audioRef.current.pause()
+        setAudioState('paused')
+      }
+      else {
+        audioRef.current.play()
+        setAudioState('playing')
+      }
     }
   }
 
+  useEffect(() => {
+    const currentAudio = audioRef.current
+
+    const handleLoading = () => {
+      setAudioState('loading')
+    }
+
+    const handlePlay = () => {
+      currentAudio?.play()
+      setAudioState('playing')
+    }
+
+    const handleEnded = () => {
+      setAudioState('ended')
+    }
+
+    currentAudio?.addEventListener('progress', handleLoading)
+    currentAudio?.addEventListener('canplaythrough', handlePlay)
+    currentAudio?.addEventListener('ended', handleEnded)
+
+    return () => {
+      currentAudio?.removeEventListener('progress', handleLoading)
+      currentAudio?.removeEventListener('canplaythrough', handlePlay)
+      currentAudio?.removeEventListener('ended', handleEnded)
+      URL.revokeObjectURL(currentAudio?.src || '')
+      currentAudio?.pause()
+      currentAudio?.setAttribute('src', '')
+    }
+  }, [])
+
+  const tooltipContent = {
+    initial: t('appApi.play'),
+    ended: t('appApi.play'),
+    paused: t('appApi.pause'),
+    playing: t('appApi.playing'),
+    loading: t('appApi.loading'),
+  }[audioState]
+
   return (
-    <div className={`${(isPlaying && !hasEnded) ? 'mr-1' : className}`}>
+    <div className={`${(audioState === 'loading' || audioState === 'playing') ? 'mr-1' : className}`}>
       <Tooltip
         selector={selector.current}
-        content={(!isPause ? ((isPlaying && !hasEnded) ? t('appApi.playing') : t('appApi.play')) : t('appApi.pause')) as string}
+        content={tooltipContent}
         className='z-10'
       >
-        <div
-          className={`box-border p-0.5 flex items-center justify-center cursor-pointer ${isAudition || 'rounded-md bg-white'}`}
-          style={{ boxShadow: !isAudition ? '0px 4px 8px -2px rgba(16, 24, 40, 0.1), 0px 2px 4px -2px rgba(16, 24, 40, 0.06)' : '' }}
-          onClick={togglePlayPause}>
-          <div className={`w-6 h-6 rounded-md ${!isAudition ? 'hover:bg-gray-200' : 'hover:bg-gray-50'} ${(isPlaying && !hasEnded) ? s.pauseIcon : s.playIcon}`}></div>
-        </div>
+        <button
+          disabled={audioState === 'loading'}
+          className={`box-border p-0.5 flex items-center justify-center cursor-pointer ${isAudition || '!p-0 rounded-md bg-white'}`}
+          onClick={handleToggle}
+        >
+          {audioState === 'loading'
+            ? (
+              <div className='w-6 h-6 rounded-md flex items-center justify-center p-2'>
+                <Loading />
+              </div>
+            )
+            : (
+              <div className={`w-6 h-6 rounded-md ${!isAudition ? 'w-4 h-4 hover:bg-gray-50' : 'hover:bg-gray-50'} ${(audioState === 'playing') ? s.pauseIcon : s.playIcon}`}></div>
+            )}
+        </button>
       </Tooltip>
+      <audio ref={audioRef} src='' className='hidden' />
     </div>
   )
 }

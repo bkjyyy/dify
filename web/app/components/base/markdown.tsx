@@ -12,7 +12,6 @@ import cn from 'classnames'
 import CopyBtn from '@/app/components/app/chat/copy-btn'
 import SVGBtn from '@/app/components/app/chat/svg'
 import Flowchart from '@/app/components/app/chat/mermaid'
-import s from '@/app/components/app/chat/style.module.css'
 
 // Available language https://github.com/react-syntax-highlighter/react-syntax-highlighter/blob/master/AVAILABLE_LANGUAGES_HLJS.MD
 const capitalizationLanguageNameMap: Record<string, string> = {
@@ -40,6 +39,11 @@ const getCorrectCapitalizationLanguageName = (language: string) => {
 
   return language.charAt(0).toUpperCase() + language.substring(1)
 }
+
+const preprocessLaTeX = (content: string) =>
+  content.replace(/\\\[(.*?)\\\]/gs, (_, equation) => `$$${equation}$$`)
+    .replace(/\\\((.*?)\\\)/gs, (_, equation) => `$${equation}$`)
+
 export function PreCode(props: { children: any }) {
   const ref = useRef<HTMLPreElement>(null)
 
@@ -82,17 +86,17 @@ const useLazyLoad = (ref: RefObject<Element>): boolean => {
 }
 
 export function Markdown(props: { content: string; className?: string }) {
-  const [isCopied, setIsCopied] = useState(false)
   const [isSVG, setIsSVG] = useState(false)
+  const latexContent = preprocessLaTeX(props.content)
   return (
     <div className={cn(props.className, 'markdown-body')}>
       <ReactMarkdown
         remarkPlugins={[[RemarkMath, { singleDollarTextMath: false }], RemarkGfm, RemarkBreaks]}
         rehypePlugins={[
-          RehypeKatex,
+          RehypeKatex as any,
         ]}
         components={{
-          code({ node, inline, className, children, ...props }) {
+          code({ inline, className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '')
             const language = match?.[1]
             const languageShowName = getCorrectCapitalizationLanguageName(language || '')
@@ -114,7 +118,7 @@ export function Markdown(props: { content: string; className?: string }) {
                         />
                       }
                       <CopyBtn
-                        className={cn(s.copyBtn, 'mr-1')}
+                        className='mr-1'
                         value={String(children).replace(/\n$/, '')}
                         isPlain
                       />
@@ -181,7 +185,7 @@ export function Markdown(props: { content: string; className?: string }) {
         linkTarget='_blank'
       >
         {/* Markdown detect has problem. */}
-        {props.content}
+        {latexContent}
       </ReactMarkdown>
     </div>
   )

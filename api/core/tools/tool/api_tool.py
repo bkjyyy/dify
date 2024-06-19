@@ -1,5 +1,6 @@
 import json
 from json import dumps
+from os import getenv
 from typing import Any, Union
 from urllib.parse import urlencode
 
@@ -7,20 +8,23 @@ import httpx
 import requests
 
 import core.helper.ssrf_proxy as ssrf_proxy
-from core.tools.entities.tool_bundle import ApiBasedToolBundle
-from core.tools.entities.tool_entities import ToolInvokeMessage
+from core.tools.entities.tool_bundle import ApiToolBundle
+from core.tools.entities.tool_entities import ToolInvokeMessage, ToolProviderType
 from core.tools.errors import ToolInvokeError, ToolParameterValidationError, ToolProviderCredentialValidationError
 from core.tools.tool.tool import Tool
 
-API_TOOL_DEFAULT_TIMEOUT = (10, 60)
+API_TOOL_DEFAULT_TIMEOUT = (
+    int(getenv('API_TOOL_DEFAULT_CONNECT_TIMEOUT', '10')),
+    int(getenv('API_TOOL_DEFAULT_READ_TIMEOUT', '60'))
+)
 
 class ApiTool(Tool):
-    api_bundle: ApiBasedToolBundle
+    api_bundle: ApiToolBundle
     
     """
     Api tool
     """
-    def fork_tool_runtime(self, meta: dict[str, Any]) -> 'Tool':
+    def fork_tool_runtime(self, runtime: dict[str, Any]) -> 'Tool':
         """
             fork a new tool with meta data
 
@@ -28,13 +32,13 @@ class ApiTool(Tool):
             :return: the new tool
         """
         return self.__class__(
-            identity=self.identity.copy() if self.identity else None,
+            identity=self.identity.model_copy() if self.identity else None,
             parameters=self.parameters.copy() if self.parameters else None,
-            description=self.description.copy() if self.description else None,
-            api_bundle=self.api_bundle.copy() if self.api_bundle else None,
-            runtime=Tool.Runtime(**meta)
+            description=self.description.model_copy() if self.description else None,
+            api_bundle=self.api_bundle.model_copy() if self.api_bundle else None,
+            runtime=Tool.Runtime(**runtime)
         )
-
+    
     def validate_credentials(self, credentials: dict[str, Any], parameters: dict[str, Any], format_only: bool = False) -> str:
         """
             validate the credentials for Api tool
@@ -48,6 +52,9 @@ class ApiTool(Tool):
         response = self.do_http_request(self.api_bundle.server_url, self.api_bundle.method, headers, parameters)
         # validate response
         return self.validate_and_parse_response(response)
+
+    def tool_provider_type(self) -> ToolProviderType:
+        return ToolProviderType.API
 
     def assembling_request(self, parameters: dict[str, Any]) -> dict[str, Any]:
         headers = {}
@@ -148,7 +155,7 @@ class ApiTool(Tool):
                 value = ''
                 if parameter['name'] in parameters:
                     value = parameters[parameter['name']]
-                elif parameter['required']:
+                elif parameter.get('required', False):
                     raise ToolParameterValidationError(f"Missing required parameter {parameter['name']}")
                 else:
                     value = (parameter.get('schema', {}) or {}).get('default', '')
@@ -158,7 +165,7 @@ class ApiTool(Tool):
                 value = ''
                 if parameter['name'] in parameters:
                     value = parameters[parameter['name']]
-                elif parameter['required']:
+                elif parameter.get('required', False):
                     raise ToolParameterValidationError(f"Missing required parameter {parameter['name']}")
                 else:
                     value = (parameter.get('schema', {}) or {}).get('default', '')
@@ -168,7 +175,7 @@ class ApiTool(Tool):
                 value = ''
                 if parameter['name'] in parameters:
                     value = parameters[parameter['name']]
-                elif parameter['required']:
+                elif parameter.get('required', False):
                     raise ToolParameterValidationError(f"Missing required parameter {parameter['name']}")
                 else:
                     value = (parameter.get('schema', {}) or {}).get('default', '')
@@ -283,6 +290,16 @@ class ApiTool(Tool):
                 elif property['type'] == 'null':
                     if value is None:
                         return None
+                elif property['type'] == 'object':
+                    if isinstance(value, str):
+                        try:
+                            return json.loads(value)
+                        except ValueError:
+                            return value
+                    elif isinstance(value, dict):
+                        return value
+                    else:
+                        return value
                 else:
                     raise ValueError(f"Invalid type {property['type']} for property {property}")
             elif 'anyOf' in property and isinstance(property['anyOf'], list):

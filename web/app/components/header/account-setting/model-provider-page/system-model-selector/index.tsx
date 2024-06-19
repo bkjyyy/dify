@@ -23,6 +23,7 @@ import Button from '@/app/components/base/button'
 import { useProviderContext } from '@/context/provider-context'
 import { updateDefaultModel } from '@/service/common'
 import { useToastContext } from '@/app/components/base/toast'
+import { useAppContext } from '@/context/app-context'
 
 type SystemModelSelectorProps = {
   textGenerationDefaultModel: DefaultModelResponse | undefined
@@ -40,12 +41,13 @@ const SystemModel: FC<SystemModelSelectorProps> = ({
 }) => {
   const { t } = useTranslation()
   const { notify } = useToastContext()
+  const { isCurrentWorkspaceManager } = useAppContext()
   const { textGenerationModelList } = useProviderContext()
   const updateModelList = useUpdateModelList()
-  const { data: embeddingModelList } = useModelList(2)
-  const { data: rerankModelList } = useModelList(3)
-  const { data: speech2textModelList } = useModelList(4)
-  const { data: ttsModelList } = useModelList(5)
+  const { data: embeddingModelList } = useModelList(ModelTypeEnum.textEmbedding)
+  const { data: rerankModelList } = useModelList(ModelTypeEnum.rerank)
+  const { data: speech2textModelList } = useModelList(ModelTypeEnum.speech2text)
+  const { data: ttsModelList } = useModelList(ModelTypeEnum.tts)
   const [changedModelTypes, setChangedModelTypes] = useState<ModelTypeEnum[]>([])
   const [currentTextGenerationDefaultModel, changeCurrentTextGenerationDefaultModel] = useSystemDefaultModelAndModelList(textGenerationDefaultModel, textGenerationModelList)
   const [currentEmbeddingsDefaultModel, changeCurrentEmbeddingsDefaultModel] = useSystemDefaultModelAndModelList(embeddingsDefaultModel, embeddingModelList)
@@ -248,6 +250,7 @@ const SystemModel: FC<SystemModelSelectorProps> = ({
               type='primary'
               className='!h-8 !text-[13px]'
               onClick={handleSave}
+              disabled={!isCurrentWorkspaceManager}
             >
               {t('common.operation.save')}
             </Button>

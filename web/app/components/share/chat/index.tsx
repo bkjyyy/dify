@@ -73,7 +73,7 @@ const Main: FC<IMainProps> = ({
   * app info
   */
   const [appUnavailable, setAppUnavailable] = useState<boolean>(false)
-  const [isUnknwonReason, setIsUnknwonReason] = useState<boolean>(false)
+  const [isUnknownReason, setIsUnknwonReason] = useState<boolean>(false)
   const [appId, setAppId] = useState<string>('')
   const [isPublicVersion, setIsPublicVersion] = useState<boolean>(true)
   const [siteInfo, setSiteInfo] = useState<SiteInfo | null>()
@@ -557,7 +557,7 @@ const Main: FC<IMainProps> = ({
       conversation_id: isNewConversation ? null : currConversationId,
     }
 
-    if (visionConfig.enabled && files && files?.length > 0) {
+    if (visionConfig?.enabled && files && files?.length > 0) {
       data.files = files.map((item) => {
         if (item.transfer_method === TransferMethod.local_file) {
           return {
@@ -839,7 +839,7 @@ const Main: FC<IMainProps> = ({
   }, [appId, messageTaskId, isInstalledApp, installedAppInfo?.id])
 
   if (appUnavailable)
-    return <AppUnavailable isUnknwonReason={isUnknwonReason} />
+    return <AppUnavailable isUnknownReason={isUnknownReason} />
 
   if (!appId || !siteInfo || !promptConfig) {
     return <div className='flex h-screen w-full'>
@@ -929,6 +929,7 @@ const Main: FC<IMainProps> = ({
                       image_file_size_limit: fileUploadConfigResponse ? fileUploadConfigResponse.image_file_size_limit : visionConfig.image_file_size_limit,
                     }}
                     allToolIcons={appMeta?.tool_icons || {}}
+                    customDisclaimer={siteInfo.custom_disclaimer}
                   />
                 </div>
               </div>)

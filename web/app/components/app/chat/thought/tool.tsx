@@ -19,7 +19,7 @@ type Props = {
 }
 
 const getIcon = (toolName: string, allToolIcons: Record<string, string | Emoji>) => {
-  if (toolName.startsWith('dataset-'))
+  if (toolName.startsWith('dataset_'))
     return <DataSetIcon className='shrink-0'></DataSetIcon>
   const icon = allToolIcons[toolName]
   if (!icon)
@@ -49,10 +49,11 @@ const Tool: FC<Props> = ({
   allToolIcons = {},
 }) => {
   const { t } = useTranslation()
-  const { name, input, isFinished, output } = payload
-  const toolName = name.startsWith('dataset-') ? t('dataset.knowledge') : name
+  const { name, label, input, isFinished, output } = payload
+  const toolName = name.startsWith('dataset_') ? t('dataset.knowledge') : name
+  const toolLabel = name.startsWith('dataset_') ? t('dataset.knowledge') : label
   const [isShowDetail, setIsShowDetail] = useState(false)
-  const icon = getIcon(toolName, allToolIcons) as any
+  const icon = getIcon(name, allToolIcons) as any
   return (
     <div>
       <div className={cn(!isShowDetail && 'shadow-sm', !isShowDetail && 'inline-block', 'max-w-full overflow-x-auto bg-white rounded-md')}>
@@ -74,9 +75,9 @@ const Tool: FC<Props> = ({
           </span>
           <span
             className='text-xs font-medium text-gray-700 truncate'
-            title={toolName}
+            title={toolLabel}
           >
-            {toolName}
+            {toolLabel}
           </span>
           <ChevronDown
             className={cn(isShowDetail && 'rotate-180', 'ml-1 w-3 h-3 text-gray-500 select-none cursor-pointer shrink-0')}

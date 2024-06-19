@@ -22,6 +22,7 @@ import {
   useModelList,
   useModelListAndDefaultModelAndCurrentProviderAndModel,
 } from '@/app/components/header/account-setting/model-provider-page/hooks'
+import { ModelTypeEnum } from '@/app/components/header/account-setting/model-provider-page/declarations'
 
 type SettingsModalProps = {
   currentDataset: DataSet
@@ -42,12 +43,12 @@ const SettingsModal: FC<SettingsModalProps> = ({
   onCancel,
   onSave,
 }) => {
-  const { data: embeddingsModelList } = useModelList(2)
+  const { data: embeddingsModelList } = useModelList(ModelTypeEnum.textEmbedding)
   const {
     modelList: rerankModelList,
     defaultModel: rerankDefaultModel,
     currentModel: isRerankDefaultModelVaild,
-  } = useModelListAndDefaultModelAndCurrentProviderAndModel(3)
+  } = useModelListAndDefaultModelAndCurrentProviderAndModel(ModelTypeEnum.rerank)
   const { t } = useTranslation()
   const { notify } = useToastContext()
   const ref = useRef(null)
@@ -99,6 +100,8 @@ const SettingsModal: FC<SettingsModalProps> = ({
           permission,
           indexing_technique: indexMethod,
           retrieval_model: postRetrievalConfig,
+          embedding_model: localeCurrentDataset.embedding_model,
+          embedding_model_provider: localeCurrentDataset.embedding_model_provider,
         },
       })
       notify({ type: 'success', message: t('common.actionMsg.modifiedSuccessfully') })

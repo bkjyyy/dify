@@ -1,16 +1,18 @@
+from typing import Optional
+
+from core.app.app_config.features.file_upload.manager import FileUploadConfigManager
 from core.file.message_file_parser import MessageFileParser
 from core.model_manager import ModelInstance
 from core.model_runtime.entities.message_entities import (
     AssistantPromptMessage,
+    ImagePromptMessageContent,
     PromptMessage,
     PromptMessageRole,
     TextPromptMessageContent,
     UserPromptMessage,
 )
-from core.model_runtime.entities.model_entities import ModelType
-from core.model_runtime.model_providers import model_provider_factory
 from extensions.ext_database import db
-from models.model import Conversation, Message
+from models.model import AppMode, Conversation, Message
 
 
 class TokenBufferMemory:
@@ -19,7 +21,7 @@ class TokenBufferMemory:
         self.model_instance = model_instance
 
     def get_history_prompt_messages(self, max_token_limit: int = 2000,
-                                    message_limit: int = 10) -> list[PromptMessage]:
+                                    message_limit: Optional[int] = None) -> list[PromptMessage]:
         """
         Get history prompt messages.
         :param max_token_limit: max token limit
@@ -28,10 +30,15 @@ class TokenBufferMemory:
         app_record = self.conversation.app
 
         # fetch limited messages, and return reversed
-        messages = db.session.query(Message).filter(
+        query = db.session.query(Message).filter(
             Message.conversation_id == self.conversation.id,
             Message.answer != ''
-        ).order_by(Message.created_at.desc()).limit(message_limit).all()
+        ).order_by(Message.created_at.desc())
+
+        if message_limit and message_limit > 0:
+            messages = query.limit(message_limit).all()
+        else:
+            messages = query.all()
 
         messages = list(reversed(messages))
         message_file_parser = MessageFileParser(
@@ -43,9 +50,21 @@ class TokenBufferMemory:
         for message in messages:
             files = message.message_files
             if files:
-                file_objs = message_file_parser.transform_message_files(
-                    files, message.app_model_config
-                )
+                if self.conversation.mode not in [AppMode.ADVANCED_CHAT.value, AppMode.WORKFLOW.value]:
+                    file_extra_config = FileUploadConfigManager.convert(message.app_model_config.to_dict())
+                else:
+                    file_extra_config = FileUploadConfigManager.convert(
+                        message.workflow_run.workflow.features_dict,
+                        is_vision=False
+                    )
+
+                if file_extra_config:
+                    file_objs = message_file_parser.transform_message_files(
+                        files,
+                        file_extra_config
+                    )
+                else:
+                    file_objs = []
 
                 if not file_objs:
                     prompt_messages.append(UserPromptMessage(content=message.query))
@@ -64,12 +83,7 @@ class TokenBufferMemory:
             return []
 
         # prune the chat message if it exceeds the max token limit
-        provider_instance = model_provider_factory.get_provider_instance(self.model_instance.provider)
-        model_type_instance = provider_instance.get_model_instance(ModelType.LLM)
-
-        curr_message_tokens = model_type_instance.get_num_tokens(
-            self.model_instance.model,
-            self.model_instance.credentials,
+        curr_message_tokens = self.model_instance.get_llm_num_tokens(
             prompt_messages
         )
 
@@ -77,9 +91,7 @@ class TokenBufferMemory:
             pruned_memory = []
             while curr_message_tokens > max_token_limit and prompt_messages:
                 pruned_memory.append(prompt_messages.pop(0))
-                curr_message_tokens = model_type_instance.get_num_tokens(
-                    self.model_instance.model,
-                    self.model_instance.credentials,
+                curr_message_tokens = self.model_instance.get_llm_num_tokens(
                     prompt_messages
                 )
 
@@ -88,7 +100,7 @@ class TokenBufferMemory:
     def get_history_prompt_text(self, human_prefix: str = "Human",
                                 ai_prefix: str = "Assistant",
                                 max_token_limit: int = 2000,
-                                message_limit: int = 10) -> str:
+                                message_limit: Optional[int] = None) -> str:
         """
         Get history prompt text.
         :param human_prefix: human prefix
@@ -111,7 +123,17 @@ class TokenBufferMemory:
             else:
                 continue
 
-            message = f"{role}: {m.content}"
-            string_messages.append(message)
+            if isinstance(m.content, list):
+                inner_msg = ""
+                for content in m.content:
+                    if isinstance(content, TextPromptMessageContent):
+                        inner_msg += f"{content.data}\n"
+                    elif isinstance(content, ImagePromptMessageContent):
+                        inner_msg += "[image]\n"
+
+                string_messages.append(f"{role}: {inner_msg.strip()}")
+            else:
+                message = f"{role}: {m.content}"
+                string_messages.append(message)
 
         return "\n".join(string_messages)

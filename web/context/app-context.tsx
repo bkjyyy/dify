@@ -19,6 +19,7 @@ export type AppContextValue = {
   currentWorkspace: ICurrentWorkspace
   isCurrentWorkspaceManager: boolean
   isCurrentWorkspaceOwner: boolean
+  isCurrentWorkspaceEditor: boolean
   mutateCurrentWorkspace: VoidFunction
   pageContainerRef: React.RefObject<HTMLDivElement>
   langeniusVersionInfo: LangGeniusVersionResponse
@@ -58,6 +59,8 @@ const AppContext = createContext<AppContextValue>({
   },
   currentWorkspace: initialWorkspaceInfo,
   isCurrentWorkspaceManager: false,
+  isCurrentWorkspaceOwner: false,
+  isCurrentWorkspaceEditor: false,
   mutateUserProfile: () => { },
   mutateCurrentWorkspace: () => { },
   pageContainerRef: createRef(),
@@ -76,7 +79,7 @@ export type AppContextProviderProps = {
 export const AppContextProvider: FC<AppContextProviderProps> = ({ children }) => {
   const pageContainerRef = useRef<HTMLDivElement>(null)
 
-  const { data: appList, mutate: mutateApps } = useSWR({ url: '/apps', params: { page: 1 } }, fetchAppList)
+  const { data: appList, mutate: mutateApps } = useSWR({ url: '/apps', params: { page: 1, limit: 30, name: '' } }, fetchAppList)
   const { data: userProfileResponse, mutate: mutateUserProfile } = useSWR({ url: '/account/profile', params: {} }, fetchUserProfile)
   const { data: currentWorkspaceResponse, mutate: mutateCurrentWorkspace } = useSWR({ url: '/workspaces/current', params: {} }, fetchCurrentWorkspace)
 
@@ -85,6 +88,7 @@ export const AppContextProvider: FC<AppContextProviderProps> = ({ children }) =>
   const [currentWorkspace, setCurrentWorkspace] = useState<ICurrentWorkspace>(initialWorkspaceInfo)
   const isCurrentWorkspaceManager = useMemo(() => ['owner', 'admin'].includes(currentWorkspace.role), [currentWorkspace.role])
   const isCurrentWorkspaceOwner = useMemo(() => currentWorkspace.role === 'owner', [currentWorkspace.role])
+  const isCurrentWorkspaceEditor = useMemo(() => ['owner', 'admin', 'editor'].includes(currentWorkspace.role), [currentWorkspace.role])
   const updateUserProfileAndVersion = useCallback(async () => {
     if (userProfileResponse && !userProfileResponse.bodyUsed) {
       const result = await userProfileResponse.json()
@@ -120,6 +124,7 @@ export const AppContextProvider: FC<AppContextProviderProps> = ({ children }) =>
       currentWorkspace,
       isCurrentWorkspaceManager,
       isCurrentWorkspaceOwner,
+      isCurrentWorkspaceEditor,
       mutateCurrentWorkspace,
     }}>
       <div className='flex flex-col h-full overflow-y-auto'>

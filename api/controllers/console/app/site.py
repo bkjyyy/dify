@@ -4,7 +4,7 @@ from werkzeug.exceptions import Forbidden, NotFound
 
 from constants.languages import supported_language
 from controllers.console import api
-from controllers.console.app import _get_app
+from controllers.console.app.wraps import get_app_model
 from controllers.console.setup import setup_required
 from controllers.console.wraps import account_initialization_required
 from extensions.ext_database import db
@@ -23,6 +23,7 @@ def parse_app_site_args():
     parser.add_argument('customize_domain', type=str, required=False, location='json')
     parser.add_argument('copyright', type=str, required=False, location='json')
     parser.add_argument('privacy_policy', type=str, required=False, location='json')
+    parser.add_argument('custom_disclaimer', type=str, required=False, location='json')
     parser.add_argument('customize_token_strategy', type=str, choices=['must', 'allow', 'not_allow'],
                         required=False,
                         location='json')
@@ -34,15 +35,13 @@ class AppSite(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @get_app_model
     @marshal_with(app_site_fields)
-    def post(self, app_id):
+    def post(self, app_model):
         args = parse_app_site_args()
 
-        app_id = str(app_id)
-        app_model = _get_app(app_id)
-
-        # The role of the current user in the ta table must be admin or owner
-        if not current_user.is_admin_or_owner:
+        # The role of the current user in the ta table must be editor, admin, or owner
+        if not current_user.is_editor:
             raise Forbidden()
 
         site = db.session.query(Site). \
@@ -58,19 +57,13 @@ class AppSite(Resource):
             'customize_domain',
             'copyright',
             'privacy_policy',
+            'custom_disclaimer',
             'customize_token_strategy',
             'prompt_public'
         ]:
             value = args.get(attr_name)
             if value is not None:
                 setattr(site, attr_name, value)
-
-                if attr_name == 'title':
-                    app_model.name = value
-                elif attr_name == 'icon':
-                    app_model.icon = value
-                elif attr_name == 'icon_background':
-                    app_model.icon_background = value
 
         db.session.commit()
 
@@ -82,11 +75,9 @@ class AppSiteAccessTokenReset(Resource):
     @setup_required
     @login_required
     @account_initialization_required
+    @get_app_model
     @marshal_with(app_site_fields)
-    def post(self, app_id):
-        app_id = str(app_id)
-        app_model = _get_app(app_id)
-
+    def post(self, app_model):
         # The role of the current user in the ta table must be admin or owner
         if not current_user.is_admin_or_owner:
             raise Forbidden()
